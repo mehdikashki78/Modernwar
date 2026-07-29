@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>@BatteryBot — Device Health Center</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  :root {
+    --bg-1: #0a0e1f;
+    --bg-2: #131836;
+    --card: rgba(25, 30, 65, 0.55);
+    --border: rgba(99, 102, 241, 0.18);
+    --text: #e4e7f1;
+    --muted: #8b92b8;
+    --good: #10b981;
+    --warn: #f59e0b;
+    --bad:  #ef4444;
+    --accent: #6366f1;
+    --accent-2: #8b5cf6;
+    --cyan: #06b6d4;
+  }
+  html, body { min-height: 100vh; }
+  body {
+    font-family: 'Inter', -apple-system, 'Segoe UI', system-ui, sans-serif;
+    background: linear-gradient(135deg, var(--bg-1), var(--bg-2));
+    color: var(--text);
+    padding: 20px 14px 60px;
+    line-height: 1.5;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Subtle static gradient bg (no animation for perf) */
+  body::before {
+    content: '';
+    position: fixed;
+    top: -20%; right: -20%;
+    width: 60%; height: 60%;
+    background: radial-gradient(circle, rgba(99,102,241,0.15), transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  body::after {
+    content: '';
+    position: fixed;
+    bottom: -20%; left: -20%;
+    width: 60%; height: 60%;
+    background: radial-gradient(circle, rgba(139,92,246,0.12), transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .container { max-width: 1100px; margin: 0 auto; position: relative; z-index: 1; }
+
+  header { text-align: center; margin-bottom: 24px; }
+  .avatar {
+    width: 60px; height: 60px;
+    margin: 0 auto 10px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    border-radius: 16px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px;
+    box-shadow: 0 8px 24px rgba(99,102,241,0.4);
+    border: 1.5px solid rgba(255,255,255,0.15);
+  }
+  h1 {
+    font-size: 26px; font-weight: 700;
+    background: linear-gradient(90deg, #818cf8, #c084fc, #06b6d4);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .pulse-dot {
+    display: inline-block; width: 6px; height: 6px;
+    background: var(--good); border-radius: 50%;
+    margin-right: 5px; vertical-align: middle;
+    box-shadow: 0 0 6px var(--good);
+  }
+
+  .nav-tabs {
+    display: flex; gap: 3px; margin: 0 auto 18px;
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: 12px; padding: 4px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .nav-tab {
+    flex: 1; padding: 9px 6px; text-align: center;
+    font-size: 11px; color: var(--muted);
+    cursor: pointer; border-radius: 8px;
+    text-transform: uppercase; letter-spacing: 1px;
+    font-weight: 600; transition: color .15s, background .15s;
+    user-select: none;
+  }
+  .nav-tab.active {
+    background: var(--accent); color: #fff;
+  }
+  .nav-tab:hover:not(.active) { color: var(--text); }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 12px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  .card h2 {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px;
+    color: var(--cyan); margin-bottom: 10px; font-weight: 700;
+  }
+  .row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 12px;
+  }
+  .row:last-child { border: none; }
+  .k { color: var(--muted); }
+  .v { color: var(--text); font-weight: 600; font-family: 'SF Mono', 'Consolas', monospace; font-size: 11.5px; text-align: right; }
+  .v.good { color: var(--good); }
+  .v.warn { color: var(--warn); }
+  .v.bad  { color: var(--bad); }
+
+  /* Battery hero - lightweight */
+  .battery-hero { text-align: center; padding: 8px 0; }
+  .battery {
+    width: 180px; height: 90px;
+    border: 3px solid rgba(255,255,255,0.9);
+    border-radius: 10px; margin: 0 auto; position: relative;
+    padding: 4px; background: rgba(0,0,0,0.3);
+  }
+  .battery::after {
+    content: ''; position: absolute;
+    right: -10px; top: 36%;
+    width: 8px; height: 28%;
+    background: rgba(255,255,255,0.9);
+    border-radius: 0 3px 3px 0;
+  }
+  .fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, var(--good), #34d399);
+    border-radius: 6px;
+    transition: width .8s ease, background .3s;
+  }
+  .pct {
+    font-size: 42px; font-weight: 700;
+    color: var(--good);
+    font-family: 'SF Mono', monospace;
+    margin: 10px 0 6px;
+  }
+  .pct span { font-size: 22px; color: var(--muted); }
+  .badge {
+    display: inline-block; padding: 4px 12px; border-radius: 999px;
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    background: rgba(16,185,129,.15); color: var(--good);
+    border: 1px solid var(--good);
+    letter-spacing: 1px;
+  }
+  .badge.charge { background: rgba(99,102,241,.15); color: var(--accent); border-color: var(--accent); }
+  .badge.low { background: rgba(245,158,11,.15); color: var(--warn); border-color: var(--warn); }
+  .badge.bad { background: rgba(239,68,68,.15); color: var(--bad); border-color: var(--bad); }
+
+  /* Gauge - clean */
+  .gauge { width: 110px; height: 110px; margin: 0 auto; position: relative; }
+  .gauge svg { transform: rotate(-90deg); }
+  .gbg { fill: none; stroke: rgba(255,255,255,0.08); stroke-width: 8; }
+  .gfg { fill: none; stroke: url(#g); stroke-width: 8; stroke-linecap: round; transition: stroke-dashoffset .8s ease; }
+  .gtxt {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'SF Mono', monospace; font-weight: 700; font-size: 24px;
+  }
+
+  /* Mini stats */
+  .mini-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-top: 8px; }
+  .mini {
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(255,255,255,0.04);
+    border-radius: 8px; padding: 8px; text-align: center;
+  }
+  .mini .lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .mini .val { font-size: 15px; font-weight: 700; color: var(--text); font-family: 'SF Mono', monospace; margin-top: 2px; }
+  .mini .val.good { color: var(--good); }
+
+  /* Chart - lightweight */
+  .chart-tabs { display: flex; gap: 3px; margin-bottom: 8px; }
+  .chart-tab {
+    flex: 1; padding: 5px; text-align: center;
+    font-size: 10px; color: var(--muted);
+    background: rgba(0,0,0,0.25);
+    border-radius: 6px; cursor: pointer;
+    text-transform: uppercase; letter-spacing: 1px; font-weight: 600;
+    user-select: none;
+  }
+  .chart-tab.active { background: var(--accent); color: #fff; }
+  .chart-wrap { position: relative; height: 140px; }
+  canvas { width: 100%; height: 100%; border-radius: 10px; background: rgba(0,0,0,0.3); display: block; }
+  .legend { display: flex; gap: 10px; font-size: 10px; color: var(--muted); margin-top: 6px; justify-content: center; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 3px; vertical-align: middle; }
+
+  /* Bars */
+  .bar-chart { display: flex; align-items: flex-end; gap: 3px; height: 60px; margin-top: 8px; }
+  .bar { flex: 1; background: linear-gradient(180deg, var(--cyan), var(--accent)); border-radius: 3px 3px 0 0; min-height: 3px; }
+
+  /* Perf */
+  .perf-bars { display: flex; gap: 2px; margin-top: 4px; }
+  .perf-bars div { flex: 1; height: 6px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; }
+  .perf-bars div span { display: block; height: 100%; background: linear-gradient(90deg, var(--cyan), var(--accent)); border-radius: 2px; }
+
+  /* AI box */
+  .ai-msg {
+    background: rgba(99,102,241,0.1);
+    border: 1px solid var(--accent);
+    border-radius: 10px; padding: 10px;
+    font-size: 12px; line-height: 1.5;
+  }
+
+  .warn-box {
+    background: rgba(239,68,68,.1); border: 1px solid var(--bad);
+    color: var(--bad); padding: 10px; border-radius: 8px;
+    text-align: center; margin: 0 auto 14px; max-width: 600px; font-size: 11px;
+  }
+  .note { text-align: center; color: var(--muted); font-size: 10px; margin-top: 14px; }
+  .tag { display: inline-block; padding: 1px 6px; border-radius: 4px; background: rgba(99,102,241,0.15); color: var(--accent); font-size: 9px; font-weight: 700; margin-left: 3px; }
+
+  .toast {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%) translateY(60px);
+    background: var(--accent); color: #fff;
+    padding: 9px 18px; border-radius: 999px;
+    font-size: 12px; font-weight: 600;
+    opacity: 0; transition: all .25s ease;
+    z-index: 100; box-shadow: 0 6px 20px rgba(99,102,241,0.5);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 480px) {
+    body { padding: 14px 10px 50px; }
+    h1 { font-size: 22px; }
+    .pct { font-size: 36px; }
+    .battery { width: 160px; height: 80px; }
+    .grid { gap: 10px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<header>
+  <div class="avatar">🤖</div>
+  <h1>@BatteryBot</h1>
+  <div class="sub"><span class="pulse-dot"></span>Device Health Center</div>
+</header>
+
+<div id="warn" class="warn-box" style="display:none;">⚠️ Battery API not supported. Showing simulated data.</div>
+
+<!-- Tabs -->
+<div class="nav-tabs">
+  <div class="nav-tab active" data-tab="overview">⚡ Overview</div>
+  <div class="nav-tab" data-tab="analytics">📊 Analytics</div>
+  <div class="nav-tab" data-tab="system">🖥️ System</div>
+  <div class="nav-tab" data-tab="ai">🧠 AI</div>
+</div>
+
+<!-- OVERVIEW -->
+<div class="tab-content active" data-tab="overview">
+  <div class="grid">
+
+    <div class="card">
+      <h2>⚡ Battery</h2>
+      <div class="battery-hero">
+        <div class="battery"><div class="fill" id="fill"></div></div>
+        <div class="pct"><span id="pct">—</span><span>%</span></div>
+        <div class="badge" id="status">—</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🔋 Live Metrics</h2>
+      <div class="row"><span class="k">Level</span><span class="v" id="level">—</span></div>
+      <div class="row"><span class="k">State</span><span class="v" id="charging">—</span></div>
+      <div class="row"><span class="k">Time to Full</span><span class="v" id="timeFull">—</span></div>
+      <div class="row"><span class="k">Time to Empty</span><span class="v" id="timeEmpty">—</span></div>
+      <div class="row"><span class="k">Charge Rate</span><span class="v" id="rateC">—</span></div>
+      <div class="row"><span class="k">Drain Rate</span><span class="v" id="rateD">—</span></div>
+    </div>
+
+    <div class="card">
+      <h2>💚 Health</h2>
+      <div class="gauge">
+        <svg width="110" height="110">
+          <defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#10b981"/><stop offset="100%" stop-color="#06b6d4"/>
+          </linearGradient></defs>
+          <circle class="gbg" cx="55" cy="55" r="46"/>
+          <circle class="gfg" id="arc" cx="55" cy="55" r="46" stroke-dasharray="289" stroke-dashoffset="289"/>
+        </svg>
+        <div class="gtxt"><span id="health">—</span></div>
+      </div>
+      <div class="mini-grid">
+        <div class="mini"><div class="lbl">Cycles</div><div class="val" id="cycles">—</div></div>
+        <div class="mini"><div class="lbl">Wear</div><div class="val" id="wear">—</div></div>
+        <div class="mini"><div class="lbl">Volt</div><div class="val" id="volt">—</div></div>
+        <div class="mini"><div class="lbl">Temp</div><div class="val" id="temp">—</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>🧠 AI Assistant</h2>
+      <div class="ai-msg" id="aiMsg">Analyzing…</div>
+    </div>
+
+    <div class="card">
+      <h2>💡 Tips</h2>
+      <div id="tips" style="font-size:12px;line-height:1.6;"></div>
+    </div>
+
+    <div class="card">
+      <h2>⏰ Time</h2>
+      <div class="row"><span class="k">Timezone</span><span class="v" id="tz">—</span></div>
+      <div class="row"><span class="k">Local Time</span><span class="v" id="clock">—</span></div>
+      <div class="row"><span class="k">Date</span><span class="v" id="date">—</span></div>
+      <div class="row"><span class="k">UTC Offset</span><span class="v" id="utc">—</span></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ANALYTICS -->
+<div class="tab-content" data-tab="analytics">
+  <div class="grid">
+    <div class="card" style="grid-column: span 2;">
+      <h2>📈 History <span class="tag" id="pts">0</span></h2>
+      <div class="chart-tabs">
+        <div class="chart-tab active" data-range="1h">1H</div>
+        <div class="chart-tab" data-range="6h">6H</div>
+        <div class="chart-tab" data-range="24h">24H</div>
+        <div class="chart-tab" data-range="all">ALL</div>
+      </div>
+      <div class="chart-wrap"><canvas id="chart"></canvas></div>
+      <div class="legend">
+        <span><i style="background:#10b981"></i>Level</span>
+        <span><i style="background:#f59e0b"></i>Voltage</span>
+        <span><i style="background:#6366f1"></i>Charging</span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>📊 7-Day Activity</h2>
+      <div class="bar-chart" id="bars"></div>
+      <div class="row" style="margin-top:6px;"><span class="k">Avg</span><span class="v" id="avg">—</span></div>
+      <div class="row"><span class="k">Peak</span><span class="v" id="peak">—</span></div>
+    </div>
+    <div class="card">
+      <h2>🔮 Predictions</h2>
+      <div class="row"><span class="k">To 20%</span><span class="v" id="pred1">—</span></div>
+      <div class="row"><span class="k">Daily Drain</span><span class="v" id="pred2">—</span></div>
+      <div class="row"><span class="k">Replacements</span><span class="v" id="pred3">—</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- SYSTEM -->
+<div class="tab-content" data-tab="system">
+  <div class="grid">
+    <div class="card">
+      <h2>📱 Device</h2>
+      <div class="row"><span class="k">Platform</span><span class="v" id="platform">—</span></div>
+      <div class="row"><span class="k">OS</span><span class="v" id="os">—</span></div>
+      <div class="row"><span class="k">Arch</span><span class="v" id="arch">—</span></div>
+      <div class="row"><span class="k">Type</span><span class="v" id="dtype">—</span></div>
+      <div class="row"><span class="k">CPU Cores</span><span class="v" id="cores">—</span></div>
+      <div class="row"><span class="k">Memory</span><span class="v" id="mem">—</span></div>
+      <div class="row"><span class="k">Language</span><span class="v" id="lang">—</span></div>
+    </div>
+    <div class="card">
+      <h2>🖥️ Display</h2>
+      <div class="row"><span class="k">Resolution</span><span class="v" id="res">—</span></div>
+      <div class="row"><span class="k">Pixel Ratio</span><span class="v" id="dpr">—</span></div>
+      <div class="row"><span class="k">Color Depth</span><span class="v" id="depth">—</span></div>
+      <div class="row"><span class="k">Orientation</span><span class="v" id="orient">—</span></div>
+      <div class="row"><span class="k">Window</span><span class="v" id="win">—</span></div>
+    </div>
+    <div class="card">
+      <h2>📡 Network</h2>
+      <div class="row"><span class="k">Type</span><span class="v" id="ctype">—</span></div>
+      <div class="row"><span class="k">Speed</span><span class="v" id="speed">—</span></div>
+      <div class="row"><span class="k">RTT</span><span class="v" id="rtt">—</span></div>
+      <div class="row"><span class="k">Online</span><span class="v" id="online">—</span></div>
+      <div class="row"><span class="k">IP</span><span class="v" id="ip">—</span></div>
+    </div>
+    <div class="card">
+      <h2>💾 Storage</h2>
+      <div class="row"><span class="k">LocalStorage</span><span class="v" id="ls">—</span></div>
+      <div class="row"><span class="k">SessionStorage</span><span class="v" id="ss">—</span></div>
+      <div class="row"><span class="k">Quota</span><span class="v" id="quota">—</span></div>
+    </div>
+    <div class="card">
+      <h2>⚡ Performance</h2>
+      <div class="row"><span class="k">Heap Limit</span><span class="v" id="hlim">—</span></div>
+      <div class="row"><span class="k">Heap Used</span><span class="v" id="huse">—</span></div>
+      <div class="row"><span class="k">FPS Est.</span><span class="v" id="fps">—</span></div>
+      <div style="margin-top:8px;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;">CPU</div>
+      <div class="perf-bars" id="cpubar"></div>
+    </div>
+  </div>
+</div>
+
+<!-- AI -->
+<div class="tab-content" data-tab="ai">
+  <div class="grid">
+    <div class="card" style="grid-column: span 2;">
+      <h2>🧠 Diagnostic Report</h2>
+      <div class="ai-msg" id="aiReport" style="min-height:60px;">Analyzing…</div>
+    </div>
+    <div class="card">
+      <h2>🎯 Score Breakdown</h2>
+      <div class="row"><span class="k">Level</span><span class="v" id="bLvl">—</span></div>
+      <div class="row"><span class="k">Health</span><span class="v" id="bHealth">—</span></div>
+      <div class="row"><span class="k">Temperature</span><span class="v" id="bTemp">—</span></div>
+      <div class="row"><span class="k">Pattern</span><span class="v" id="bPattern">—</span></div>
+      <div class="row" style="margin-top:6px;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;">
+        <span class="k" style="font-weight:700;color:var(--cyan);">Total</span>
+        <span class="v good" id="bTotal" style="font-size:16px;">—</span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>🏆 Achievements</h2>
+      <div id="achv" style="font-size:11px;line-height:1.7;"></div>
+    </div>
+  </div>
+</div>
+
+<p class="note">⏱ Updates: clock 1s · battery 5s · perf 30s</p>
+
+<div class="toast" id="toast"></div>
+
+</div>
+
+<script>
+(function() {
+  'use strict';
+  var $ = function(id) { return document.getElementById(id); };
+  var set = function(id, v) { var el = $(id); if (el) el.textContent = v; };
+  var setHTML = function(id, v) { var el = $(id); if (el) el.innerHTML = v; };
+
+  function fb(b) {
+    if (!b) return '0 B';
+    if (b < 1024) return b + ' B';
+    if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+    if (b < 1073741824) return (b/1048576).toFixed(2) + ' MB';
+    return (b/1073741824).toFixed(2) + ' GB';
+  }
+  function ft(s) {
+    if (s === Infinity || isNaN(s) || !s) return '—';
+    var h = Math.floor(s/3600), m = Math.floor((s%3600)/60);
+    return h > 0 ? h + 'h ' + m + 'm' : m + 'm';
+  }
+  function detectOS() {
+    var ua = navigator.userAgent;
+    if (/Windows NT 10/.test(ua)) return 'Windows 10/11';
+    if (/Mac OS X/.test(ua)) return 'macOS';
+    if (/Android/.test(ua)) return 'Android';
+    if (/iPhone|iPad/.test(ua)) return 'iOS';
+    if (/Linux/.test(ua)) return 'Linux';
+    return 'Unknown';
+  }
+  function detectArch() {
+    var ua = navigator.userAgent;
+    if (/x86_64|amd64|Win64/.test(ua)) return 'x86_64';
+    if (/aarch64|arm64/.test(ua)) return 'arm64';
+    if (/arm/.test(ua)) return 'arm';
+    return '—';
+  }
+  function detectDev() {
+    var ua = navigator.userAgent;
+    if (/Mobile|Android|iPhone/.test(ua)) return '📱 Mobile';
+    if (/iPad|Tablet/.test(ua)) return '📱 Tablet';
+    return '💻 Desktop';
+  }
+
+  // DEVICE
+  set('platform', navigator.platform || '—');
+  set('os', detectOS());
+  set('arch', detectArch());
+  set('dtype', detectDev());
+  set('cores', navigator.hardwareConcurrency || '—');
+  set('mem', navigator.deviceMemory ? navigator.deviceMemory + ' GB' : '—');
+  set('lang', navigator.language);
+
+  // SCREEN
+  function upScreen() {
+    set('res', screen.width + ' × ' + screen.height);
+    set('dpr', (window.devicePixelRatio || 1) + 'x');
+    set('depth', screen.colorDepth + ' bit');
+    set('orient', window.innerWidth > window.innerHeight ? 'landscape' : 'portrait');
+    set('win', window.innerWidth + ' × ' + window.innerHeight);
+  }
+  upScreen();
+  var resizeTimer;
+  window.addEventListener('resize', function() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(upScreen, 200);
+  });
+
+  // TIME
+  function upTime() {
+    var d = new Date();
+    set('tz', Intl.DateTimeFormat().resolvedOptions().timeZone);
+    set('utc', 'UTC' + (d.getTimezoneOffset() <= 0 ? '+' : '-') + Math.abs(d.getTimezoneOffset()/60));
+    set('clock', d.toLocaleTimeString());
+    set('date', d.toLocaleDateString());
+  }
+  upTime();
+  setInterval(upTime, 1000);
+
+  // NETWORK
+  var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  function upNet() {
+    if (conn) {
+      set('ctype', (conn.effectiveType || conn.type || '—').toUpperCase());
+      set('speed', conn.downlink ? conn.downlink + ' Mbps' : '—');
+      set('rtt', conn.rtt ? conn.rtt + ' ms' : '—');
+    } else { set('ctype', 'N/A'); set('speed', '—'); set('rtt', '—'); }
+    set('online', navigator.onLine ? '🟢 Online' : '🔴 Offline');
+  }
+  upNet();
+  if (conn) conn.addEventListener('change', upNet);
+
+  if (typeof fetch === 'function') {
+    fetch('https://api.ipify.org?format=json')
+      .then(function(r){return r.json();})
+      .then(function(d){set('ip', d.ip);})
+      .catch(function(){set('ip', '—');});
+  } else set('ip', 'N/A');
+
+  // STORAGE
+  function upStorage() {
+    var ls = 0; for (var k in localStorage) ls += (localStorage.getItem(k) || '').length + k.length;
+    var ss = 0; for (var k in sessionStorage) ss += (sessionStorage.getItem(k) || '').length + k.length;
+    set('ls', fb(ls)); set('ss', fb(ss));
+    if (navigator.storage && navigator.storage.estimate) {
+      navigator.storage.estimate().then(function(est) {
+        set('quota', fb(est.quota || 0));
+      });
+    } else set('quota', 'N/A');
+  }
+  upStorage();
+
+  // PERF
+  function upPerf() {
+    if (performance.memory) {
+      set('hlim', fb(performance.memory.jsHeapSizeLimit));
+      set('huse', fb(performance.memory.usedJSHeapSize));
+    } else { set('hlim', 'N/A'); set('huse', 'N/A'); }
+    var t0 = performance.now();
+    var s = 0; for (var i = 0; i < 3e5; i++) s += Math.sqrt(i);
+    var dt = performance.now() - t0;
+    var cpu = Math.max(5, Math.min(100, 100 - dt));
+    set('fps', Math.round(60 + (Math.random()-0.5)*3) + ' fps');
+    var h = '';
+    for (var i = 0; i < 16; i++) h += '<div><span style="width:' + Math.max(5, Math.min(100, cpu + (Math.random()-0.5)*35)) + '%"></span></div>';
+    $('cpubar').innerHTML = h;
+  }
+  upPerf();
+  setInterval(upPerf, 30000);
+
+  // BARS
+  var daily = JSON.parse(localStorage.getItem('bb_daily') || '[42,68,35,75,52,88,47]');
+  function renderBars() {
+    var max = Math.max.apply(null, daily.concat([1]));
+    var h = '';
+    for (var i = 0; i < daily.length; i++) h += '<div class="bar" style="height:' + (daily[i]/max*100) + '%"></div>';
+    $('bars').innerHTML = h;
+    set('avg', (daily.reduce(function(a,b){return a+b;}, 0)/daily.length).toFixed(1) + '%');
+    var pi = daily.indexOf(Math.max.apply(null, daily));
+    set('peak', ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][pi] + ' (' + daily[pi] + '%)');
+  }
+  renderBars();
+
+  // BATTERY
+  var battery = null;
+  var history = JSON.parse(localStorage.getItem('bb_hist') || '[]');
+  var prevLvl = null, prevT = null;
+  var chartRange = '1h';
+
+  function upBattery() {
+    if (!battery) return;
+    var now = Date.now();
+    var lvl = Math.round(battery.level * 100);
+    var chg = battery.charging;
+    var temp = 28 + Math.random() * 10;
+
+    if (prevLvl !== null && prevT !== null) {
+      var dt = (now - prevT) / 1000 / 60;
+      if (dt > 0.1) {
+        var dl = lvl - prevLvl;
+        if (chg && dl > 0) set('rateC', (dl/dt*60).toFixed(2) + ' %/h');
+        else if (!chg && dl < 0) set('rateD', (Math.abs(dl)/dt*60).toFixed(2) + ' %/h');
+      }
+    }
+    prevLvl = lvl; prevT = now;
+
+    $('fill').style.width = lvl + '%';
+    set('pct', lvl);
+    set('level', lvl + '%');
+    set('charging', chg ? '⚡ Yes' : 'No');
+
+    var badge = $('status');
+    badge.className = 'badge';
+    if (chg) {
+      badge.textContent = '⚡ Charging';
+      badge.classList.add('charge');
+      $('fill').style.background = 'linear-gradient(90deg, #6366f1, #8b5cf6)';
+    } else if (lvl >= 60) {
+      badge.textContent = '✅ Excellent';
+      $('fill').style.background = 'linear-gradient(90deg, #10b981, #34d399)';
+    } else if (lvl >= 30) {
+      badge.textContent = '⚠️ Moderate';
+      badge.classList.add('low');
+      $('fill').style.background = 'linear-gradient(90deg, #f59e0b, #fbbf24)';
+    } else if (lvl >= 15) {
+      badge.textContent = '🪫 Low';
+      badge.classList.add('low');
+      $('fill').style.background = 'linear-gradient(90deg, #f97316, #fb923c)';
+    } else {
+      badge.textContent = '❌ Critical';
+      badge.classList.add('bad');
+      $('fill').style.background = 'linear-gradient(90deg, #ef4444, #f87171)';
+    }
+
+    set('timeFull', ft(battery.chargingTime));
+    set('timeEmpty', ft(battery.dischargingTime));
+
+    var h = estHealth();
+    set('health', h);
+    var circ = 2 * Math.PI * 46;
+    $('arc').style.strokeDashoffset = circ - (h/100) * circ;
+    set('cycles', Math.floor(history.filter(function(p){return p.c;}).length / 2) + 100);
+    set('wear', (100 - h) + '%');
+    set('volt', (3.2 + battery.level * 1.3).toFixed(2) + 'V');
+    set('temp', temp.toFixed(1) + '°C');
+
+    // AI
+    upAI(lvl, chg, h, temp);
+    upTips(lvl, chg, h, temp);
+    upScore(lvl, chg, h, temp);
+    upAch(lvl, h);
+    upPred(lvl, h);
+
+    history.push({t: now, l: lvl, c: chg, v: 3.2 + battery.level * 1.3});
+    if (history.length > 1500) history = history.slice(-1500);
+    if (history.length % 8 === 0) {
+      try { localStorage.setItem('bb_hist', JSON.stringify(history.slice(-400))); } catch(e) {}
+    }
+
+    drawChart();
+  }
+
+  function estHealth() {
+    if (history.length < 5) return 95;
+    var drops = [];
+    for (var i = 1; i < history.length; i++) {
+      if (!history[i].c && history[i-1].c) {
+        var d = history[i-1].l - history[i].l;
+        if (d > 0) drops.push(d);
+      }
+    }
+    var avg = drops.length ? drops.reduce(function(a,b){return a+b;}, 0) / drops.length : 2;
+    return Math.max(40, Math.min(100, Math.round(100 - Math.max(0, (avg - 1) * 4))));
+  }
+
+  function upAI(l, c, h, t) {
+    var msgs = [];
+    if (l < 20 && !c) msgs.push("🚨 Critical! Battery at " + l + "%. Charge now.");
+    else if (c) msgs.push("⚡ Charging at " + l + "%. Optimal range: 20-80%.");
+    else if (h < 70) msgs.push("🪫 Health at " + h + "%. Replacement recommended soon.");
+    else if (t > 40) msgs.push("🔥 Hot (" + t.toFixed(0) + "°C). Let device cool.");
+    else msgs.push("✅ All good. Battery " + l + "%, health " + h + "%.");
+    msgs.push("💡 Keep charge between 20-80% for longest life.");
+    setHTML('aiMsg', msgs.map(function(m){return '<div style="padding:2px 0;">'+m+'</div>';}).join(''));
+    setHTML('aiReport', msgs.map(function(m){return '<div style="padding:2px 0;">'+m+'</div>';}).join(''));
+  }
+
+  function upTips(l, c, h, t) {
+    var tips = [];
+    if (!c && l < 20) tips.push('🔴 Plug in NOW');
+    else if (!c && l < 40) tips.push('⚠️ Low battery');
+    if (c && l > 90) tips.push('💡 Unplug — overcharging');
+    if (t > 40) tips.push('🔥 Hot — cool down');
+    if (h < 70) tips.push('🪫 Battery worn');
+    if (tips.length === 0) tips.push('✅ Optimal');
+    setHTML('tips', tips.map(function(t){return '<div>'+t+'</div>';}).join(''));
+  }
+
+  function upScore(l, c, h, t) {
+    var lC = l > 80 ? 25 : l > 40 ? 18 : 8;
+    var hC = Math.round(h * 0.4);
+    var tC = t < 35 ? 15 : t < 40 ? 5 : -10;
+    var cC = c ? 0 : 15;
+    var tot = Math.max(0, Math.min(100, lC + hC + tC + cC));
+    set('bLvl', lC + '/25');
+    set('bHealth', hC + '/40');
+    set('bTemp', tC + '/15');
+    set('bPattern', c ? 'Active' : 'Idle');
+    set('bTotal', tot + '/100');
+  }
+
+  function upAch(l, h) {
+    var a = [];
+    if (l > 95) a.push('🏆 Full Power');
+    if (h > 90) a.push('💚 Healthy');
+    if (history.length > 100) a.push('📊 Tracker');
+    if (a.length === 0) a.push('🎯 Beginner');
+    setHTML('achv', a.join('<br>'));
+  }
+
+  function upPred(l, h) {
+    if (history.length > 10) {
+      var drain = 0, cnt = 0;
+      for (var i = Math.max(0, history.length - 20); i < history.length; i++) {
+        if (!history[i].c && i > 0 && history[i].l < history[i-1].l) {
+          drain += history[i-1].l - history[i].l; cnt++;
+        }
+      }
+      if (cnt > 0) {
+        drain = drain / cnt;
+        set('pred1', l > 20 ? ((l-20)/drain).toFixed(1) + 'h' : 'Past');
+        set('pred2', (drain*24).toFixed(0) + '%/day');
+      }
+    }
+    set('pred3', Math.max(1, Math.floor((h-60)/5)) + ' cycles');
+  }
+
+  // CHART
+  var canvas = $('chart');
+  var ctx = canvas.getContext('2d');
+  var chartReady = false;
+  function sizeChart() {
+    if (canvas.offsetWidth > 0 && canvas.offsetHeight > 0) {
+      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = canvas.offsetWidth * dpr;
+      canvas.height = canvas.offsetHeight * dpr;
+      ctx.scale(dpr, dpr);
+      chartReady = true;
+    }
+    drawChart();
+  }
+  function drawChart() {
+    if (!chartReady) return;
+    var w = canvas.offsetWidth, h = canvas.offsetHeight;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    set('pts', history.length + ' pts');
+    if (history.length < 2) {
+      ctx.fillStyle = '#8b92b8'; ctx.font = '11px monospace'; ctx.textAlign = 'center';
+      ctx.fillText('Collecting data…', w/2, h/2);
+      return;
+    }
+    var ranges = {'1h':3600000, '6h':21600000, '24h':86400000, 'all': Infinity};
+    var cutoff = Date.now() - ranges[chartRange];
+    var data = history.filter(function(p){return p.t >= cutoff;});
+    if (data.length < 2) data = history;
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    for (var i = 0; i < 4; i++) {
+      var y = h/4 * i;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+    var min = data[0].t, max = data[data.length-1].t;
+    var range = max - min || 1;
+
+    var grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, 'rgba(16,185,129,0.35)');
+    grad.addColorStop(1, 'rgba(16,185,129,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    for (var i = 0; i < data.length; i++) {
+      var x = (data[i].t - min) / range * w;
+      var y = h - (data[i].l / 100) * h;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath(); ctx.fill();
+
+    ctx.strokeStyle = '#10b981'; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    for (var i = 0; i < data.length; i++) {
+      var x = (data[i].t - min) / range * w;
+      var y = h - (data[i].l / 100) * h;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    ctx.strokeStyle = '#f59e0b'; ctx.lineWidth = 1; ctx.setLineDash([2,2]);
+    ctx.beginPath();
+    for (var i = 0; i < data.length; i++) {
+      var x = (data[i].t - min) / range * w;
+      var y = h - ((data[i].v - 3) * 50) * (h/100);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = 'rgba(99,102,241,0.3)';
+    for (var i = 0; i < data.length; i++) {
+      if (data[i].c) {
+        var x = (data[i].t - min) / range * w;
+        ctx.fillRect(x, 0, 1.5, h);
+      }
+    }
+  }
+  setTimeout(sizeChart, 100);
+  var chartResize;
+  window.addEventListener('resize', function() {
+    clearTimeout(chartResize);
+    chartResize = setTimeout(function() { chartReady = false; sizeChart(); }, 250);
+  });
+
+  // Chart tabs (event delegation)
+  document.querySelector('.chart-tabs').addEventListener('click', function(e) {
+    var t = e.target.closest('.chart-tab');
+    if (!t) return;
+    document.querySelectorAll('.chart-tab').forEach(function(x){x.classList.remove('active');});
+    t.classList.add('active');
+    chartRange = t.dataset.range;
+    drawChart();
+  });
+
+  // Nav tabs
+  document.querySelector('.nav-tabs').addEventListener('click', function(e) {
+    var t = e.target.closest('.nav-tab');
+    if (!t) return;
+    document.querySelectorAll('.nav-tab').forEach(function(x){x.classList.remove('active');});
+    t.classList.add('active');
+    var target = t.dataset.tab;
+    document.querySelectorAll('.tab-content').forEach(function(c) {
+      c.classList.toggle('active', c.dataset.tab === target);
+    });
+    setTimeout(sizeChart, 50);
+  });
+
+  // INIT BATTERY
+  function initBattery() {
+    if (!navigator.getBattery) {
+      $('warn').style.display = 'block';
+      var lvl = 78;
+      function tick() {
+        if (document.hidden) return;
+        lvl = Math.max(15, Math.min(100, lvl + (Math.random() - 0.45) * 1.5));
+        battery = {
+          level: lvl/100, charging: lvl > 95,
+          chargingTime: lvl > 95 ? Infinity : (95-lvl)*60,
+          dischargingTime: lvl/100 * 5 * 3600,
+          addEventListener: function() {}
+        };
+        upBattery();
+      }
+      tick();
+      setInterval(tick, 5000);
+      return;
+    }
+    navigator.getBattery().then(function(b) {
+      battery = b;
+      upBattery();
+      ['levelchange','chargingchange','chargingtimechange','dischargingtimechange'].forEach(function(ev) {
+        b.addEventListener(ev, upBattery);
+      });
+    }).catch(function() {
+      $('warn').style.display = 'block';
+      initBattery();
+    });
+  }
+
+  initBattery();
+  setInterval(function(){ if (battery) upBattery(); }, 5000);
+})();
+</script>
+
+</body>
+</html>

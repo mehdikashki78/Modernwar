@@ -2,10 +2,20 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
 <title>@BatteryBot — Device Health Center</title>
 <style>
+  html { zoom: 0.9; }
+  /* On touch devices, use natural scaling */
+  @media (hover: none) and (pointer: coarse) {
+    html { zoom: 1; }
+  }
+  /* On small screens, use natural scaling */
+  @media (max-width: 768px) {
+    html { zoom: 1; }
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   :root {
     --bg-1: #0a0e1f;
